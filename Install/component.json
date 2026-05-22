@@ -1,0 +1,70 @@
+{
+	"name" : "Jobs",
+	"route" : "jobs",
+	"description" : "<p>TMS jobs component</p>",
+	"module_type" : "components",
+	"app_type" : "tms",
+	"category" : "admin",
+	"version" : "0.0.0",
+	"repo" : "https://github.com/sp-tms/tms-components-admin-jobs",
+	"class" : "Apps\\Tms\\Components\\Jobs\\JobsComponent",
+	"dependencies" : 
+	{
+		"core" : 
+		{
+			"name" : "Core",
+			"version" : "0.0.0-rc.15",
+			"repo" : "https://github.com/sp-framework/core"
+		},
+		"apptype" : 
+		{
+			"name" : "Transport Management System",
+			"version" : "0.0.0",
+			"repo" : "https://github.com/sp-tms/tms"
+		},
+		"packages" : 
+		[
+			{
+				"name" : "Companies",
+				"version" : "0.0.0",
+				"repo" : "https://github.com/sp-tms/tms-packages-admin-companies"
+			},
+			
+			{
+				"name" : "Vehicles",
+				"version" : "0.0.0",
+				"repo" : "https://github.com/sp-tms/tms-packages-admin-vehicles"
+			}
+		],
+		"middlewares" : [],
+		"views" : [],
+		"externals" : 
+		{
+			"composer" : 
+			{
+				"require" : []
+			},
+			"config" : 
+			{
+				"allow-plugins" : []
+			},
+			"extra" : 
+			{
+				"patches" : []
+			}
+		}
+	},
+	"menu" : 
+	{
+		"jobs" : 
+		{
+			"title" : "jobs",
+			"icon" : "clipboard-list",
+			"link" : "jobs"
+		},
+		"seq" : "0"
+	},
+	"widgets" : [],
+	"filters" : [],
+	"settings" : []
+}
