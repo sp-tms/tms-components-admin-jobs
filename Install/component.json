@@ -34,6 +34,36 @@
 				"name" : "Vehicles",
 				"version" : "0.0.0",
 				"repo" : "https://github.com/sp-tms/tms-packages-admin-vehicles"
+			},
+			
+			{
+				"name" : "JobsInvoices",
+				"version" : "0.0.0",
+				"repo" : "https://github.com/sp-tms/tms-packages-admin-jobsinvoices"
+			},
+			
+			{
+				"name" : "JobsLrs",
+				"version" : "0.0.0",
+				"repo" : "https://github.com/sp-tms/tms-packages-admin-jobslrs"
+			},
+			
+			{
+				"name" : "JobsTrips",
+				"version" : "0.0.0",
+				"repo" : "https://github.com/sp-tms/tms-packages-admin-jobstrips"
+			},
+			
+			{
+				"name" : "JobsPayments",
+				"version" : "0.0.0",
+				"repo" : "https://github.com/sp-tms/tms-packages-admin-jobspayments"
+			},
+			
+			{
+				"name" : "JobsCharges",
+				"version" : "0.0.0",
+				"repo" : "https://github.com/sp-tms/tms-packages-admin-jobscharges"
 			}
 		],
 		"middlewares" : [],
@@ -65,6 +95,13 @@
 		"seq" : "0"
 	},
 	"widgets" : [],
-	"filters" : [],
+	"filters" : 
+	[
+		{
+			"name" : "Current Financial Year",
+			"conditions" : "-|financial_year|equals|",
+			"is_default" : true
+		}
+	],
 	"settings" : []
 }
