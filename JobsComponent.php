@@ -61,6 +61,8 @@ class JobsComponent extends BaseComponent
 
             $consignors = [];
             $consignees = [];
+            $this->view->consignor = [];
+            $this->view->consignee = [];
             $this->view->consignorAddresses = [];
             $this->view->consigneeAddresses = [];
             $this->view->uoms = [];
@@ -83,6 +85,9 @@ class JobsComponent extends BaseComponent
 
                     $this->view->consignorAddresses = $consignors;
                 }
+
+                $this->view->consignor = $consignor;
+
                 $consignee = $this->companiesPackage->getCompany($job['to_company_id']);
 
                 if ($consignee && isset($consignee['addresses'])) {
@@ -92,6 +97,8 @@ class JobsComponent extends BaseComponent
 
                     $this->view->consigneeAddresses = $consignees;
                 }
+
+                $this->view->consignee = $consignee;
             } else {
                 $job = $this->jobsLrsPackage->getNextLr();
             }
@@ -109,11 +116,6 @@ class JobsComponent extends BaseComponent
             }
             if (isset($job['company_id']) && $job['company_id'] !== 0) {
                 $job['company'] = $this->companiesPackage->getCompany($job['company_id']);
-            }
-
-            //Get invoice signature details
-            if (isset($job['invoice']) && isset($job['invoice']['signed_id'])) {
-                $job['invoice']['signed_by'] = $this->basepackages->profiles->profile((int) $job['invoice']['signed_id']);
             }
 
             $this->view->job = $job;
@@ -380,6 +382,19 @@ class JobsComponent extends BaseComponent
         );
     }
 
+    public function extractDigitalSignatureAction()
+    {
+        $this->requestIsPost();
+
+        $this->jobsInvoicesPackage->extractDigitalSignature($this->postData()['uuid']);
+
+        $this->addResponse(
+            $this->jobsInvoicesPackage->packagesData->responseMessage,
+            $this->jobsInvoicesPackage->packagesData->responseCode,
+            $this->jobsInvoicesPackage->packagesData->responseData ?? []
+        );
+    }
+
     public function signInvoiceAction()
     {
         $this->requestIsPost();
@@ -430,5 +445,27 @@ class JobsComponent extends BaseComponent
             $this->jobsChargesPackage->packagesData->responseCode,
             $this->jobsChargesPackage->packagesData->responseData ?? []
         );
+    }
+
+    public function getLrPreviewAction()
+    {
+        $this->getQueryArr['id'] = $this->postData()['lr_no'];
+
+        $this->viewAction();
+
+        $this->getQueryArr['id'] = null;//Avoid CSRF Token Regeneration
+
+        return $this->view->getPartial('form/preview', ['preview' => 'lr']);
+    }
+
+    public function getInvoicePreviewAction()
+    {
+        $this->getQueryArr['id'] = $this->postData()['lr_no'];
+
+        $this->viewAction();
+
+        $this->getQueryArr['id'] = null;//Avoid CSRF Token Regeneration
+
+        return $this->view->getPartial('form/preview', ['preview' => 'invoice']);
     }
 }
