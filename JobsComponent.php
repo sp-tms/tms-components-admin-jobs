@@ -38,6 +38,15 @@ class JobsComponent extends BaseComponent
 
         $this->companiesPackage = $this->usePackage(Companies::class);
 
+        $organisations = $this->companiesPackage->getCompaniesByBusinessType();
+        if ($organisations && count($organisations) > 0) {
+            foreach ($organisations as &$organisation) {
+                $organisation['name'] = $organisation['name'] . ' (' . $organisation['id'] . ')';
+            }
+        }
+
+        $this->setModuleSettingsData(['organisations' => $organisations]);
+
         $this->vehiclesPackage = $this->usePackage(Vehicles::class);
 
         $this->toolsUomPackage = $this->usePackage(ToolsUom::class);
@@ -47,6 +56,8 @@ class JobsComponent extends BaseComponent
         $this->jobsChargesPackage = $this->usePackage(JobsCharges::class);
 
         $this->jobsInvoicesPackage = $this->usePackage(JobsInvoices::class);
+
+        $this->setModuleSettings();
     }
 
     /**
@@ -70,14 +81,18 @@ class JobsComponent extends BaseComponent
             $this->view->job = [];
 
             if ($this->getData()['id'] != 0) {
+                $this->jobsLrsPackage->useMutex(true);
+                $this->companiesPackage->useMutex(true);
+
                 $job = $this->jobsLrsPackage->getLr((int) $this->getData()['id']);
 
                 if (!$job) {
                     return $this->throwIdNotFound();
                 }
 
-                $consignor = $this->companiesPackage->getCompany($job['from_company_id']);
+                $this->setActivityLogsPackage($this->jobsLrsPackage, 'jobs/view');
 
+                $consignor = $this->companiesPackage->getCompany($job['from_company_id']);
                 if ($consignor && isset($consignor['addresses'])) {
                     foreach ($consignor['addresses'] as $consignorAddress) {
                         $consignors[$consignorAddress['id']] = $consignorAddress;
@@ -85,11 +100,9 @@ class JobsComponent extends BaseComponent
 
                     $this->view->consignorAddresses = $consignors;
                 }
-
                 $this->view->consignor = $consignor;
 
                 $consignee = $this->companiesPackage->getCompany($job['to_company_id']);
-
                 if ($consignee && isset($consignee['addresses'])) {
                     foreach ($consignee['addresses'] as $consigneeAddress) {
                         $consignees[$consigneeAddress['id']] = $consigneeAddress;
@@ -97,20 +110,21 @@ class JobsComponent extends BaseComponent
 
                     $this->view->consigneeAddresses = $consignees;
                 }
-
                 $this->view->consignee = $consignee;
             } else {
                 $job = $this->jobsLrsPackage->getNextLr();
             }
 
+            //Charges
             if (isset($job['charges']) && count($job['charges']) > 0) {
                 foreach ($job['charges'] as $key => $jobCharge) {
                     $job['charges'][$jobCharge['id']] = $jobCharge;
+
                     unset($job['charges'][$key]);
                 }
             }
 
-            //Get organisation information for invoice details
+            //Get organisation and company information for invoice details
             if (isset($job['organisation_id']) && $job['organisation_id'] !== 0) {
                 $job['organisation'] = $this->companiesPackage->getCompany($job['organisation_id']);
             }
@@ -130,6 +144,9 @@ class JobsComponent extends BaseComponent
             }
             $this->view->organisations = $organisations;
 
+            $this->setModuleSettingsData($organisations);
+
+            //Get All Customers
             $customers = $this->companiesPackage->getCompaniesByBusinessType('customers');
             if ($customers && count($customers) > 0) {
                 foreach ($customers as &$customer) {
@@ -138,12 +155,14 @@ class JobsComponent extends BaseComponent
             }
             $this->view->customers = $customers;
 
+            //Available LR Status
             $this->view->lrStatus = $this->jobsLrsPackage->getLrAvailableStatus();
 
+            //Available UoMS
             $this->view->uoms = $this->toolsUomPackage->getAll()->toolsuom;
 
+            //Available Charges
             $charges = $this->toolsChargesPackage->getAll()->toolscharges;
-
             if (count($charges) > 0) {
                 $charges = msort(array: $charges, key: 'type', preserveKey: true);
 
@@ -155,8 +174,87 @@ class JobsComponent extends BaseComponent
                     }
                 }
             }
-
             $this->view->charges = $charges;
+
+            $this->view->formattedInvoice = '';
+            //Print options
+            if (isset($this->getData()['print'])) {
+                $this->view->print = $this->getData()['print'];
+
+                if ($this->view->print === 'lr') {
+                    $package = $this->modules->packages->getPackageByClass(get_class($this->jobsLrsPackage));
+                } else if ($this->view->print === 'invoice') {
+                    $package = $this->modules->packages->getPackageByClass(get_class($this->jobsInvoicesPackage));
+                } else {
+                    return $this->throwIdNotFound();
+                }
+
+                if (!$package) {
+                    return $this->throwIdNotFound();
+                }
+
+                $organisation_settings = [];
+                if (isset($package['settings']['organisations'][$job['organisation_id']])) {
+                    $organisation_settings = $package['settings']['organisations'][$job['organisation_id']];
+                }
+
+                $this->view->organisationSettings = $organisation_settings;
+
+                $this->view->formattedInvoice = $this->jobsLrsPackage->getFormattedInvoice($job, $organisation_settings);
+
+                $invoiceDataArr = [];
+
+                $this->getTotal($invoiceDataArr);
+
+                if (count($invoiceDataArr) > 0) {
+                    foreach ($invoiceDataArr as $invoiceDataKey => $invoiceData) {
+                        $this->view->{$invoiceDataKey} = $invoiceData;
+                    }
+                }
+
+                $this->view->setLayout('print');
+
+                $this->view->pick('jobs/form/print');
+
+                $this->view->showLrNotes = false;
+                $this->view->showINotes = false;
+                $this->view->showOpterms = false;
+                $this->view->showCpterms = false;
+
+                if (isset($this->getData()['lrnotes']) && $this->getData()['lrnotes'] == 'true') {
+                    $this->view->showLrNotes = true;
+                }
+                if (isset($this->getData()['inotes']) && $this->getData()['inotes'] == 'true') {
+                    $this->view->showINotes = true;
+                }
+                if (isset($this->getData()['opterms']) && $this->getData()['opterms'] == 'true') {
+                    $this->view->showOpterms = true;
+                }
+                if (isset($this->getData()['cpterms']) && $this->getData()['cpterms'] == 'true') {
+                    $this->view->showCpterms = true;
+                }
+
+                $this->getQueryArr['id'] = null;//Avoid CSRF Token Regeneration
+
+                return;
+            } else {//Get Invoice settings
+                if (isset($job['organisation_id'])) {
+                    $package = $this->modules->packages->getPackageByClass(get_class($this->jobsInvoicesPackage));
+
+                    if (!$package) {
+                        return $this->throwIdNotFound();
+                    }
+
+                    $organisation_settings = [];
+                    if (isset($package['settings']['organisations'][$job['organisation_id']])) {
+                        $organisation_settings = $package['settings']['organisations'][$job['organisation_id']];
+                    }
+
+                    $this->view->organisationSettings = $organisation_settings;
+
+                    $this->view->formattedInvoice = $this->jobsLrsPackage->getFormattedInvoice($job, $organisation_settings);
+                }
+            }
 
             $this->view->pick('jobs/view');
 
@@ -209,7 +307,7 @@ class JobsComponent extends BaseComponent
             };
 
         $conditions = [];
-        $conditions['order'] = 'date desc';
+        $conditions['order'] = 'id desc';
 
         $this->generateDTContent(
             $this->jobsLrsPackage,
@@ -229,6 +327,7 @@ class JobsComponent extends BaseComponent
 
     /**
      * @acl(name=add)
+     * @notification(name=add)
      */
     public function addAction()
     {
@@ -240,14 +339,21 @@ class JobsComponent extends BaseComponent
             $this->jobsLrsPackage->packagesData->responseMessage,
             $this->jobsLrsPackage->packagesData->responseCode
         );
+
+        if ($this->jobsLrsPackage->packagesData->responseCode === 0) {
+            $this->addToNotification('add', 'Added new job ' . $this->jobsLrsPackage->packagesData->last['name'], null, $this->jobsLrsPackage->packagesData->last);
+        }
     }
 
     /**
      * @acl(name=update)
+     * @notification(name=update)
      */
     public function updateAction()
     {
         $this->requestIsPost();
+
+        $this->jobsLrsPackage->useMutex(true);
 
         $this->jobsLrsPackage->updateLr($this->postData());
 
@@ -255,14 +361,30 @@ class JobsComponent extends BaseComponent
             $this->jobsLrsPackage->packagesData->responseMessage,
             $this->jobsLrsPackage->packagesData->responseCode
         );
+
+        if ($this->jobsLrsPackage->packagesData->responseCode === 0) {
+            $this->addToNotification('update', 'Updated company ' . $this->jobsLrsPackage->packagesData->last['name'], null, $this->jobsLrsPackage->packagesData->last);
+        }
     }
 
     /**
      * @acl(name=remove)
+     * @notification(name=remove)
      */
     public function removeAction()
     {
-        //
+        $this->requestIsPost();
+
+        $this->jobsLrsPackage->removeLr($this->postData());
+
+        $this->addResponse(
+            $this->jobsLrsPackage->packagesData->responseMessage,
+            $this->jobsLrsPackage->packagesData->responseCode
+        );
+
+        if ($this->jobsLrsPackage->packagesData->responseCode === 0) {
+            $this->addToNotification('remove', 'Archived job ' . $this->jobsLrsPackage->packagesData->last['name'], null, $this->jobsLrsPackage->packagesData->last);
+        }
     }
 
     protected function checkCurrentFinancialYearFilter()
@@ -447,25 +569,59 @@ class JobsComponent extends BaseComponent
         );
     }
 
-    public function getLrPreviewAction()
+    public function emailAction()
     {
-        $this->getQueryArr['id'] = $this->postData()['lr_no'];
+        $this->requestIsPost();
 
-        $this->viewAction();
+        $this->jobsLrsPackage->email($this->postData());
 
-        $this->getQueryArr['id'] = null;//Avoid CSRF Token Regeneration
-
-        return $this->view->getPartial('form/preview', ['preview' => 'lr']);
+        $this->addResponse(
+            $this->jobsLrsPackage->packagesData->responseMessage,
+            $this->jobsLrsPackage->packagesData->responseCode,
+            $this->jobsLrsPackage->packagesData->responseData ?? []
+        );
     }
 
-    public function getInvoicePreviewAction()
+    public function getTotal(&$invoiceDataArr = [])
     {
-        $this->getQueryArr['id'] = $this->postData()['lr_no'];
+        $total = 0;
+        if ($this->view->job['charges'] && count($this->view->job['charges']) > 0) {
+            $charges = [];
+            foreach ($this->view->job['charges'] as $chargeKey => $charge) {
+                $total += $charge['amount'];
 
-        $this->viewAction();
+                $charge['amount'] =
+                    str_replace('EN_ ', '', (new \NumberFormatter('en_IN', \NumberFormatter::CURRENCY))->formatCurrency($charge['amount'], 'en_IN'));
+                $charge['quantity'] =
+                    str_replace('EN_ ', '', (new \NumberFormatter('en_IN', \NumberFormatter::DECIMAL))->format($charge['quantity']));
+                $charge['rate'] =
+                    str_replace('EN_ ', '', (new \NumberFormatter('en_IN', \NumberFormatter::DECIMAL))->format($charge['rate']));
 
-        $this->getQueryArr['id'] = null;//Avoid CSRF Token Regeneration
+                $charges[$chargeKey] = $charge;
+            }
+            $job = $this->view->job;
+            $job['charges'] = $charges;
+            $this->view->job = $job;
+        }
 
-        return $this->view->getPartial('form/preview', ['preview' => 'invoice']);
+
+        $rupees = floor($total);
+        $paise = round($total - $rupees, 2) * 100;
+        $totalInWords = '';
+
+        if ($total > 0) {
+            $formatter = new \NumberFormatter('en_IN', \NumberFormatter::SPELLOUT);
+            $totalInWords .= '&#8360; ' . $formatter->format($rupees);
+
+            if ($paise > 0) {
+                $totalInWords .= ' and ' . $formatter->format($paise) . ' paise';
+            }
+
+            $formatter = new \NumberFormatter('en_IN', \NumberFormatter::CURRENCY);
+            $total = str_replace('EN_ ', '', (new \NumberFormatter('en_IN', \NumberFormatter::CURRENCY))->formatCurrency($total, 'en_IN'));
+        }
+
+        $invoiceDataArr['total'] = $total;
+        $invoiceDataArr['totalInWords'] = ucwords($totalInWords) . ' Only';
     }
 }
