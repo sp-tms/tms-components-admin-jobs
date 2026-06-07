@@ -98,9 +98,10 @@
 	"filters" : 
 	[
 		{
-			"name" : "Current Financial Year",
+			"name" : "Financial Year",
 			"conditions" : "-|financial_year|equals|",
-			"is_default" : true
+			"is_default" : true,
+			"archived" : true
 		}
 	],
 	"settings" : []

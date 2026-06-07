@@ -30,11 +30,17 @@ class JobsComponent extends BaseComponent
 
     protected $jobsInvoicesPackage;
 
-    public function initialize()
+    public function initialize($onlyActivityLogs = false)
     {
         $this->checkCurrentFinancialYearFilter();
 
         $this->jobsLrsPackage = $this->usePackage(JobsLrs::class);
+
+        $this->setActivityLogsPackage($this->jobsLrsPackage, 'jobs/view');
+
+        if ($onlyActivityLogs) {
+            return;
+        }
 
         $this->companiesPackage = $this->usePackage(Companies::class);
 
@@ -89,8 +95,6 @@ class JobsComponent extends BaseComponent
                 if (!$job) {
                     return $this->throwIdNotFound();
                 }
-
-                $this->setActivityLogsPackage($this->jobsLrsPackage, 'jobs/view');
 
                 $consignor = $this->companiesPackage->getCompany($job['from_company_id']);
                 if ($consignor && isset($consignor['addresses'])) {
@@ -313,13 +317,13 @@ class JobsComponent extends BaseComponent
             $this->jobsLrsPackage,
             'jobs/view',
             $conditions,
-            ['id', 'organisation_id', 'company_id', 'financial_year', 'invoice_no', 'date', 'status'],
+            ['id', 'lr_no', 'invoice_no', 'organisation_id', 'company_id', 'financial_year', 'date', 'status'],
             true,
-            ['id', 'organisation_id', 'company_id', 'financial_year', 'invoice_no', 'date', 'status'],
+            ['id', 'lr_no', 'invoice_no', 'organisation_id', 'company_id', 'financial_year', 'date', 'status'],
             $controlActions,
-            ['id' => 'LR #', 'organisation_id' => 'Organisation (id)', 'company_id' => 'customer (id)'],
+            ['lr_no' => 'LR #', 'invoice_no' => 'Invoice #', 'organisation_id' => 'Organisation (id)', 'company_id' => 'customer (id)'],
             $replaceColumns,
-            'id'
+            'lr_no'
         );
 
         $this->view->pick('jobs/list');
@@ -341,7 +345,7 @@ class JobsComponent extends BaseComponent
         );
 
         if ($this->jobsLrsPackage->packagesData->responseCode === 0) {
-            $this->addToNotification('add', 'Added new job ' . $this->jobsLrsPackage->packagesData->last['name'], null, $this->jobsLrsPackage->packagesData->last);
+            $this->addToNotification('add', 'Added new job ' . $this->jobsLrsPackage->packagesData->last['lr_no'], null, $this->jobsLrsPackage->packagesData->last);
         }
     }
 
@@ -363,7 +367,7 @@ class JobsComponent extends BaseComponent
         );
 
         if ($this->jobsLrsPackage->packagesData->responseCode === 0) {
-            $this->addToNotification('update', 'Updated company ' . $this->jobsLrsPackage->packagesData->last['name'], null, $this->jobsLrsPackage->packagesData->last);
+            $this->addToNotification('update', 'Updated company ' . $this->jobsLrsPackage->packagesData->last['lr_no'], null, $this->jobsLrsPackage->packagesData->last);
         }
     }
 
@@ -392,35 +396,45 @@ class JobsComponent extends BaseComponent
         $component = $this->modules->components->getComponentByClass($this::class);
 
         if ($component) {
+            $financialFilter = $this->basepackages->filters->getFilters($component['id'], null, true);
             $filters = $this->basepackages->filters->getFilters($component['id']);
 
             if ($filters && count($filters) > 0) {
+                $now = \Carbon\Carbon::now();
+
+                if ($now->month < 4) {
+                    $nowStartYear = substr($now->clone()->subYear(1)->year, 2);
+                    $nowEndYear = substr($now->year, 2);
+                } else {
+                    $nowStartYear = substr($now->year, 2);
+                    $nowEndYear = substr($now->clone()->addYear(1)->year, 2);
+                }
+
                 foreach ($filters as $filter) {
-                    if (strtolower($filter['name']) === 'current financial year') {
-                        $now = \Carbon\Carbon::now();
-
-                        if ($now->month < 4) {
-                            $nowStartYear = substr($now->clone()->subYear(1)->year, 2);
-                            $nowEndYear = substr($now->year, 2);
-                        } else {
-                            $nowStartYear = substr($now->year, 2);
-                            $nowEndYear = substr($now->clone()->addYear(1)->year, 2);
-                        }
-
-                        if (str_contains($filter['conditions'], $nowStartYear . '-' . $nowEndYear)) {
+                    if (str_starts_with(strtolower($filter['name']), 'financial year')) {
+                        if (str_contains($filter['conditions'], $nowStartYear . '-' . $nowEndYear) &&
+                            str_contains($filter['name'], $nowStartYear . '-' . $nowEndYear)
+                        ) {
                             return;
                         }
-
-                        $conditionsArr = explode('|', $filter['conditions']);
-
-                        $conditionsArr[3] = $nowStartYear . '-' . $nowEndYear . '&';
-
-                        $filter['conditions'] = implode('|', $conditionsArr);
-
-                        $this->basepackages->filters->updateFilter($filter);
-
-                        return true;
                     }
+                }
+
+                //Filter does not exists
+                if ($financialFilter && count($financialFilter) === 1) {
+                    $newFilter = $this->helper->first($financialFilter);
+                    unset($newFilter['id']);
+                    $newFilter['archived'] = false;
+                    $newFilter['url'] = null;
+                    $newFilter['auto_generated'] = 0;
+                    $newFilter['name'] = 'Financial Year (' . $nowStartYear . '-' . $nowEndYear . ')';
+                    $conditionsArr = explode('|', $newFilter['conditions']);
+                    $conditionsArr[3] = $nowStartYear . '-' . $nowEndYear . '&';
+                    $newFilter['conditions'] = implode('|', $conditionsArr);
+
+                    $this->basepackages->filters->addFilter($newFilter);
+
+                    return true;
                 }
             }
         }
@@ -588,14 +602,21 @@ class JobsComponent extends BaseComponent
         if ($this->view->job['charges'] && count($this->view->job['charges']) > 0) {
             $charges = [];
             foreach ($this->view->job['charges'] as $chargeKey => $charge) {
-                $total += $charge['amount'];
+                if (isset($charge['amount']) && $charge['amount'] > 0) {
+                    $total += $charge['amount'];
 
-                $charge['amount'] =
-                    str_replace('EN_ ', '', (new \NumberFormatter('en_IN', \NumberFormatter::CURRENCY))->formatCurrency($charge['amount'], 'en_IN'));
-                $charge['quantity'] =
-                    str_replace('EN_ ', '', (new \NumberFormatter('en_IN', \NumberFormatter::DECIMAL))->format($charge['quantity']));
-                $charge['rate'] =
-                    str_replace('EN_ ', '', (new \NumberFormatter('en_IN', \NumberFormatter::DECIMAL))->format($charge['rate']));
+                    $charge['amount'] =
+                        str_replace('EN_ ', '', (new \NumberFormatter('en_IN', \NumberFormatter::CURRENCY))->formatCurrency($charge['amount'], 'en_IN'));
+                }
+
+                if (isset($charge['quantity']) && $charge['quantity'] > 0) {
+                    $charge['quantity'] =
+                        str_replace('EN_ ', '', (new \NumberFormatter('en_IN', \NumberFormatter::DECIMAL))->format($charge['quantity']));
+                }
+                if (isset($charge['rate']) && $charge['rate'] > 0) {
+                    $charge['rate'] =
+                        str_replace('EN_ ', '', (new \NumberFormatter('en_IN', \NumberFormatter::DECIMAL))->format($charge['rate']));
+                }
 
                 $charges[$chargeKey] = $charge;
             }
