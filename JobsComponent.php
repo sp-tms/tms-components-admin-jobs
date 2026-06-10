@@ -4,10 +4,14 @@ namespace Apps\Tms\Components\Jobs;
 
 use Apps\Tms\Packages\Adminltetags\Traits\DynamicTable;
 use Apps\Tms\Packages\Companies\Companies;
+use Apps\Tms\Packages\Employees\Employees;
 use Apps\Tms\Packages\Jobs\Charges\JobsCharges;
+use Apps\Tms\Packages\Jobs\Expenses\JobsExpenses;
 use Apps\Tms\Packages\Jobs\Invoices\JobsInvoices;
 use Apps\Tms\Packages\Jobs\Lrs\JobsLrs;
+use Apps\Tms\Packages\Jobs\Trips\JobsTrips;
 use Apps\Tms\Packages\Tools\Charges\ToolsCharges;
+use Apps\Tms\Packages\Tools\Expenses\ToolsExpenses;
 use Apps\Tms\Packages\Tools\Uom\ToolsUom;
 use Apps\Tms\Packages\Vehicles\Vehicles;
 use System\Base\BaseComponent;
@@ -28,7 +32,15 @@ class JobsComponent extends BaseComponent
 
     protected $jobsChargesPackage;
 
+    protected $jobsTripsPackage;
+
     protected $jobsInvoicesPackage;
+
+    protected $employeesPackage;
+
+    protected $toolsExpensesPackage;
+
+    protected $jobsExpensesPackage;
 
     public function initialize($onlyActivityLogs = false)
     {
@@ -61,9 +73,19 @@ class JobsComponent extends BaseComponent
 
         $this->jobsChargesPackage = $this->usePackage(JobsCharges::class);
 
+        $this->jobsTripsPackage = $this->usePackage(JobsTrips::class);
+
         $this->jobsInvoicesPackage = $this->usePackage(JobsInvoices::class);
 
+        $this->employeesPackage = $this->usePackage(Employees::class);
+
+        $this->toolsExpensesPackage = $this->usePackage(ToolsExpenses::class);
+
+        $this->jobsExpensesPackage = $this->usePackage(JobsExpenses::class);
+
         $this->setModuleSettings();
+
+        $this->setNotificationPackage($this->jobsLrsPackage, 'lr_no');
     }
 
     /**
@@ -120,13 +142,22 @@ class JobsComponent extends BaseComponent
             }
 
             //Charges
+            $jobCharges = [];
             if (isset($job['charges']) && count($job['charges']) > 0) {
                 foreach ($job['charges'] as $key => $jobCharge) {
-                    $job['charges'][$jobCharge['id']] = $jobCharge;
-
-                    unset($job['charges'][$key]);
+                    $jobCharges[$jobCharge['id']] = $jobCharge;
                 }
             }
+            $job['charges'] = $jobCharges;
+
+            //Expenses
+            $jobExpenses = [];
+            if (isset($job['expenses']) && count($job['expenses']) > 0) {
+                foreach ($job['expenses'] as $key => $jobExpense) {
+                    $jobExpenses[$jobExpense['id']] = $jobExpense;
+                }
+            }
+            $job['expenses'] = $jobExpenses;
 
             //Get organisation and company information for invoice details
             if (isset($job['organisation_id']) && $job['organisation_id'] !== 0) {
@@ -171,14 +202,53 @@ class JobsComponent extends BaseComponent
                 $charges = msort(array: $charges, key: 'type', preserveKey: true);
 
                 foreach ($charges as &$charge) {
-                    if ($charge['type'] == 0) {
+                    if ($charge['type'] == '1') {
                         $charge['display_name'] = 'PRODUCT: ' . $charge['name'];
-                    } else {
+                    } else if ($charge['type'] == '2') {
                         $charge['display_name'] = 'CHARGES: ' . $charge['name'];
+                    } else {
+                        $charge['display_name'] = $charge['name'];
                     }
                 }
             }
             $this->view->charges = $charges;
+
+            //Employees
+            $employees = $this->employeesPackage->getAll()->employees;
+            if ($employees && count($employees) > 0) {
+                foreach ($employees as $employeesKey => &$employee) {
+                    $employee = $this->employeesPackage->getEmployees($employee['id']);
+
+                    if (isset($employee['contact'])) {
+                        $employee['full_name'] = $employee['contact']['full_name'];
+                    }
+
+                    if (isset($employee['designation']) && $employee['designation'] !== '') {
+                        $employee['full_name'] = $employee['full_name'] . ' (' . strtoupper($employee['designation']) . ')';
+                    }
+                }
+            }
+
+            $this->view->employees = $employees;
+
+            //Available Expenses
+            $expenses = $this->toolsExpensesPackage->getAll()->toolsexpenses;
+            if (count($expenses) > 0) {
+                $expenses = msort(array: $expenses, key: 'type', preserveKey: true);
+
+                foreach ($expenses as &$expense) {
+                    if ($expense['type'] == '1') {
+                        $expense['display_name'] = 'ADVANCE: ' . $expense['name'];
+                    } else if ($expense['type'] == '2') {
+                        $expense['display_name'] = 'REIMBURSE: ' . $expense['name'];
+                    } else {
+                        $expense['display_name'] = $expense['name'];
+                    }
+                }
+            }
+            $this->view->expenses = $expenses;
+
+            $this->view->expenseTransactionTypes = $this->jobsExpensesPackage->getExpenseTransactionTypes();
 
             $this->view->formattedInvoice = '';
             //Print options
@@ -291,14 +361,18 @@ class JobsComponent extends BaseComponent
                                 $data['company_id'] = $customer['name'] . ' (' . $data['company_id'] . ')';
                             }
                         }
-                        if ($data['status'] == '0') {
+                        if ($data['status'] == '1') {
                             $data['status'] = 'OPEN (' . $data['status'] . ')';
-                        } else if ($data['status'] == '1') {
-                            $data['status'] = 'COMPLETE (' . $data['status'] . ')';
                         } else if ($data['status'] == '2') {
                             $data['status'] = 'ON TRIP (' . $data['status'] . ')';
                         } else if ($data['status'] == '3') {
                             $data['status'] = 'PAYMENT PENDING (' . $data['status'] . ')';
+                        } else if ($data['status'] == '4') {
+                            $data['status'] = 'COMPLETE (' . $data['status'] . ')';
+                        } else if ($data['status'] == '5') {
+                            $data['status'] = 'INVALID (' . $data['status'] . ')';
+                        } else {
+                            $data['status'] = 'UNKNOWN (' . $data['status'] . ')';
                         }
 
                         if (!isset($data['invoice_no'])) {
@@ -317,9 +391,9 @@ class JobsComponent extends BaseComponent
             $this->jobsLrsPackage,
             'jobs/view',
             $conditions,
-            ['id', 'lr_no', 'invoice_no', 'organisation_id', 'company_id', 'financial_year', 'date', 'status'],
+            ['lr_no', 'invoice_no', 'organisation_id', 'company_id', 'financial_year', 'date', 'status'],
             true,
-            ['id', 'lr_no', 'invoice_no', 'organisation_id', 'company_id', 'financial_year', 'date', 'status'],
+            ['lr_no', 'invoice_no', 'organisation_id', 'company_id', 'financial_year', 'date', 'status'],
             $controlActions,
             ['lr_no' => 'LR #', 'invoice_no' => 'Invoice #', 'organisation_id' => 'Organisation (id)', 'company_id' => 'customer (id)'],
             $replaceColumns,
@@ -343,10 +417,6 @@ class JobsComponent extends BaseComponent
             $this->jobsLrsPackage->packagesData->responseMessage,
             $this->jobsLrsPackage->packagesData->responseCode
         );
-
-        if ($this->jobsLrsPackage->packagesData->responseCode === 0) {
-            $this->addToNotification('add', 'Added new job ' . $this->jobsLrsPackage->packagesData->last['lr_no'], null, $this->jobsLrsPackage->packagesData->last);
-        }
     }
 
     /**
@@ -365,10 +435,6 @@ class JobsComponent extends BaseComponent
             $this->jobsLrsPackage->packagesData->responseMessage,
             $this->jobsLrsPackage->packagesData->responseCode
         );
-
-        if ($this->jobsLrsPackage->packagesData->responseCode === 0) {
-            $this->addToNotification('update', 'Updated company ' . $this->jobsLrsPackage->packagesData->last['lr_no'], null, $this->jobsLrsPackage->packagesData->last);
-        }
     }
 
     /**
@@ -387,7 +453,7 @@ class JobsComponent extends BaseComponent
         );
 
         if ($this->jobsLrsPackage->packagesData->responseCode === 0) {
-            $this->addToNotification('remove', 'Archived job ' . $this->jobsLrsPackage->packagesData->last['name'], null, $this->jobsLrsPackage->packagesData->last);
+            $this->addToNotification('remove', 'Archived job ' . $this->jobsLrsPackage->packagesData->last['lr_no'], null, $this->jobsLrsPackage->packagesData->last);
         }
     }
 
@@ -444,7 +510,7 @@ class JobsComponent extends BaseComponent
     {
         $this->requestIsPost();
 
-        $this->jobsLrsPackage->getNextLr($this->postData());
+        $this->jobsLrsPackage->getNextLr($this->postData()['financial_year'] ?? null);
 
         $this->addResponse(
             $this->jobsLrsPackage->packagesData->responseMessage,
@@ -470,7 +536,7 @@ class JobsComponent extends BaseComponent
     {
         $this->requestIsPost();
 
-        $this->jobsLrsPackage->getNextLr($this->postData());
+        $this->jobsLrsPackage->getFy();
 
         $this->addResponse(
             $this->jobsLrsPackage->packagesData->responseMessage,
@@ -489,6 +555,32 @@ class JobsComponent extends BaseComponent
             $this->jobsLrsPackage->packagesData->responseMessage,
             $this->jobsLrsPackage->packagesData->responseCode,
             $this->jobsLrsPackage->packagesData->responseData ?? []
+        );
+    }
+
+    public function checkVoucherAction()
+    {
+        $this->requestIsPost();
+
+        $this->jobsTripsPackage->checkVoucher($this->postData());
+
+        $this->addResponse(
+            $this->jobsTripsPackage->packagesData->responseMessage,
+            $this->jobsTripsPackage->packagesData->responseCode,
+            $this->jobsTripsPackage->packagesData->responseData ?? []
+        );
+    }
+
+    public function getNextVoucherNumberAction()
+    {
+        $this->requestIsPost();
+
+        $this->jobsTripsPackage->getNextVoucherNumber($this->postData()['financial_year']);
+
+        $this->addResponse(
+            $this->jobsTripsPackage->packagesData->responseMessage,
+            $this->jobsTripsPackage->packagesData->responseCode,
+            $this->jobsTripsPackage->packagesData->responseData ?? []
         );
     }
 
@@ -523,19 +615,6 @@ class JobsComponent extends BaseComponent
         $this->requestIsPost();
 
         $this->jobsInvoicesPackage->extractDigitalSignature($this->postData()['uuid']);
-
-        $this->addResponse(
-            $this->jobsInvoicesPackage->packagesData->responseMessage,
-            $this->jobsInvoicesPackage->packagesData->responseCode,
-            $this->jobsInvoicesPackage->packagesData->responseData ?? []
-        );
-    }
-
-    public function signInvoiceAction()
-    {
-        $this->requestIsPost();
-
-        $this->jobsInvoicesPackage->signInvoice($this->postData());
 
         $this->addResponse(
             $this->jobsInvoicesPackage->packagesData->responseMessage,
@@ -580,6 +659,58 @@ class JobsComponent extends BaseComponent
             $this->jobsChargesPackage->packagesData->responseMessage,
             $this->jobsChargesPackage->packagesData->responseCode,
             $this->jobsChargesPackage->packagesData->responseData ?? []
+        );
+    }
+
+    public function addJobsExpenseAction()
+    {
+        $this->requestIsPost();
+
+        $this->jobsExpensesPackage->addJobsExpense($this->postData());
+
+        $this->addResponse(
+            $this->jobsExpensesPackage->packagesData->responseMessage,
+            $this->jobsExpensesPackage->packagesData->responseCode,
+            $this->jobsExpensesPackage->packagesData->responseData ?? []
+        );
+    }
+
+    public function updateJobsExpenseAction()
+    {
+        $this->requestIsPost();
+
+        $this->jobsExpensesPackage->updateJobsExpense($this->postData());
+
+        $this->addResponse(
+            $this->jobsExpensesPackage->packagesData->responseMessage,
+            $this->jobsExpensesPackage->packagesData->responseCode,
+            $this->jobsExpensesPackage->packagesData->responseData ?? []
+        );
+    }
+
+    public function removeJobsExpenseAction()
+    {
+        $this->requestIsPost();
+
+        $this->jobsExpensesPackage->removeJobsExpense($this->postData());
+
+        $this->addResponse(
+            $this->jobsExpensesPackage->packagesData->responseMessage,
+            $this->jobsExpensesPackage->packagesData->responseCode,
+            $this->jobsExpensesPackage->packagesData->responseData ?? []
+        );
+    }
+
+    public function checkCarryForwardedExpensesAction()
+    {
+        $this->requestIsPost();
+
+        $this->jobsExpensesPackage->checkCarryForwardedExpenses($this->postData());
+
+        $this->addResponse(
+            $this->jobsExpensesPackage->packagesData->responseMessage,
+            $this->jobsExpensesPackage->packagesData->responseCode,
+            $this->jobsExpensesPackage->packagesData->responseData ?? []
         );
     }
 

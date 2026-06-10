@@ -64,6 +64,18 @@
 				"name" : "JobsCharges",
 				"version" : "0.0.0",
 				"repo" : "https://github.com/sp-tms/tms-packages-admin-jobscharges"
+			},
+			
+			{
+				"name" : "JobsExpenses",
+				"version" : "0.1.0",
+				"repo" : "https://github.com/sp-tms/tms-packages-admin-jobsexpenses"
+			},
+			
+			{
+				"name" : "ToolsExpenses",
+				"version" : "0.0.0",
+				"repo" : "https://github.com/sp-tms/tms-packages-tools-toolsexpenses"
 			}
 		],
 		"middlewares" : [],
