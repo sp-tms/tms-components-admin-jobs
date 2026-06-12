@@ -7,6 +7,7 @@ use Apps\Tms\Packages\Companies\Companies;
 use Apps\Tms\Packages\Employees\Employees;
 use Apps\Tms\Packages\Jobs\Charges\JobsCharges;
 use Apps\Tms\Packages\Jobs\Expenses\JobsExpenses;
+use Apps\Tms\Packages\Jobs\Fuel\JobsFuel;
 use Apps\Tms\Packages\Jobs\Invoices\JobsInvoices;
 use Apps\Tms\Packages\Jobs\Lrs\JobsLrs;
 use Apps\Tms\Packages\Jobs\Trips\JobsTrips;
@@ -41,6 +42,8 @@ class JobsComponent extends BaseComponent
     protected $toolsExpensesPackage;
 
     protected $jobsExpensesPackage;
+
+    protected $jobsFuelPackage;
 
     public function initialize($onlyActivityLogs = false)
     {
@@ -82,6 +85,8 @@ class JobsComponent extends BaseComponent
         $this->toolsExpensesPackage = $this->usePackage(ToolsExpenses::class);
 
         $this->jobsExpensesPackage = $this->usePackage(JobsExpenses::class);
+
+        $this->jobsFuelPackage = $this->usePackage(JobsFuel::class);
 
         $this->setModuleSettings();
 
@@ -159,6 +164,15 @@ class JobsComponent extends BaseComponent
             }
             $job['expenses'] = $jobExpenses;
 
+            //Fuels
+            $jobFuels = [];
+            if (isset($job['fuels']) && count($job['fuels']) > 0) {
+                foreach ($job['fuels'] as $key => $jobFuel) {
+                    $jobFuels[$jobFuel['id']] = $jobFuel;
+                }
+            }
+            $job['fuels'] = $jobFuels;
+
             //Get organisation and company information for invoice details
             if (isset($job['organisation_id']) && $job['organisation_id'] !== 0) {
                 $job['organisation'] = $this->companiesPackage->getCompany($job['organisation_id']);
@@ -169,7 +183,16 @@ class JobsComponent extends BaseComponent
 
             $this->view->job = $job;
 
-            $this->view->vehicles = $this->vehiclesPackage->getAll()->vehicles;
+            $vehiclesArr = $this->vehiclesPackage->getAll()->vehicles;
+            $vehicles = [];
+            foreach ($vehiclesArr as $vehicle) {
+                //Temp in place due to incorrect data from BTC
+                $vehicle['registration_no'] = str_replace(["'", "\\"], '', $vehicle['registration_no']);
+                //Can remove above line during production
+                $vehicles[$vehicle['id']] = $vehicle;
+            }
+
+            $this->view->vehicles = $vehicles;
 
             $organisations = $this->companiesPackage->getCompaniesByBusinessType();
             if ($organisations && count($organisations) > 0) {
@@ -249,6 +272,19 @@ class JobsComponent extends BaseComponent
             $this->view->expenses = $expenses;
 
             $this->view->expenseTransactionTypes = $this->jobsExpensesPackage->getExpenseTransactionTypes();
+
+            //Get All Vendors for fuel
+            $vendors = [];
+            $vendorsArr = $this->companiesPackage->getCompaniesByBusinessType('vendors');
+            if ($vendorsArr && count($vendorsArr) > 0) {
+                foreach ($vendorsArr as $vendor) {
+                    $vendor['name'] = $vendor['name'] . ' (' . $vendor['id'] . ')';
+                    $vendors[$vendor['id']] = $vendor;
+                }
+            }
+            $this->view->vendors = $vendors;
+
+            $this->view->fuelTransactionTypes = $this->jobsFuelPackage->getFuelTransactionTypes();
 
             $this->view->formattedInvoice = '';
             //Print options
@@ -711,6 +747,45 @@ class JobsComponent extends BaseComponent
             $this->jobsExpensesPackage->packagesData->responseMessage,
             $this->jobsExpensesPackage->packagesData->responseCode,
             $this->jobsExpensesPackage->packagesData->responseData ?? []
+        );
+    }
+
+    public function addJobsFuelAction()
+    {
+        $this->requestIsPost();
+
+        $this->jobsFuelPackage->addJobsFuel($this->postData());
+
+        $this->addResponse(
+            $this->jobsFuelPackage->packagesData->responseMessage,
+            $this->jobsFuelPackage->packagesData->responseCode,
+            $this->jobsFuelPackage->packagesData->responseData ?? []
+        );
+    }
+
+    public function updateJobsFuelAction()
+    {
+        $this->requestIsPost();
+
+        $this->jobsFuelPackage->updateJobsFuel($this->postData());
+
+        $this->addResponse(
+            $this->jobsFuelPackage->packagesData->responseMessage,
+            $this->jobsFuelPackage->packagesData->responseCode,
+            $this->jobsFuelPackage->packagesData->responseData ?? []
+        );
+    }
+
+    public function removeJobsFuelAction()
+    {
+        $this->requestIsPost();
+
+        $this->jobsFuelPackage->removeJobsFuel($this->postData());
+
+        $this->addResponse(
+            $this->jobsFuelPackage->packagesData->responseMessage,
+            $this->jobsFuelPackage->packagesData->responseCode,
+            $this->jobsFuelPackage->packagesData->responseData ?? []
         );
     }
 

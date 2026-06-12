@@ -76,10 +76,23 @@
 				"name" : "ToolsExpenses",
 				"version" : "0.0.0",
 				"repo" : "https://github.com/sp-tms/tms-packages-tools-toolsexpenses"
+			},
+			
+			{
+				"name" : "JobsFuel",
+				"version" : "0.1.0",
+				"repo" : "https://github.com/sp-tms/tms-packages-admin-jobsfuel"
 			}
 		],
 		"middlewares" : [],
-		"views" : [],
+		"views" : 
+		[
+			{
+				"name" : "Jobs",
+				"version" : "0.2.0",
+				"repo" : "https://github.com/sp-tms/tms-views-admin-default-jobs"
+			}
+		],
 		"externals" : 
 		{
 			"composer" : 
