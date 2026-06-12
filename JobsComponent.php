@@ -92,8 +92,6 @@ class JobsComponent extends BaseComponent
 
         $this->jobsFuelPackage = $this->usePackage(JobsFuel::class);
 
-        $this->setModuleSettings();
-
         $this->setNotificationPackage($this->jobsLrsPackage, 'lr_no');
     }
 
