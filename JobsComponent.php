@@ -66,7 +66,11 @@ class JobsComponent extends BaseComponent
             }
         }
 
-        $this->setModuleSettingsData(['organisations' => $organisations]);
+        if ($organisations) {
+            $this->setModuleSettingsData(['organisations' => $organisations]);
+
+            $this->setModuleSettings(true);
+        }
 
         $this->vehiclesPackage = $this->usePackage(Vehicles::class);
 
@@ -202,7 +206,11 @@ class JobsComponent extends BaseComponent
             }
             $this->view->organisations = $organisations;
 
-            $this->setModuleSettingsData($organisations);
+            if ($organisations) {
+                $this->setModuleSettingsData(['organisations' => $organisations]);
+
+                $this->setModuleSettings(true);
+            }
 
             //Get All Customers
             $customers = $this->companiesPackage->getCompaniesByBusinessType('customers');
