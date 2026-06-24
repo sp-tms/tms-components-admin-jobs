@@ -13,7 +13,7 @@
 		"core" : 
 		{
 			"name" : "Core",
-			"version" : "0.0.0-rc.15",
+			"version" : "0.0.0-rc.16",
 			"repo" : "https://github.com/sp-framework/core"
 		},
 		"apptype" : 
@@ -26,49 +26,49 @@
 		[
 			{
 				"name" : "Companies",
-				"version" : "0.0.0",
+				"version" : "0.4.0",
 				"repo" : "https://github.com/sp-tms/tms-packages-admin-companies"
 			},
 			
 			{
 				"name" : "Vehicles",
-				"version" : "0.0.0",
+				"version" : "0.4.0",
 				"repo" : "https://github.com/sp-tms/tms-packages-admin-vehicles"
 			},
 			
 			{
 				"name" : "JobsInvoices",
-				"version" : "0.0.0",
+				"version" : "0.3.0",
 				"repo" : "https://github.com/sp-tms/tms-packages-admin-jobsinvoices"
 			},
 			
 			{
 				"name" : "JobsLrs",
-				"version" : "0.0.0",
+				"version" : "0.5.0",
 				"repo" : "https://github.com/sp-tms/tms-packages-admin-jobslrs"
 			},
 			
 			{
 				"name" : "JobsTrips",
-				"version" : "0.0.0",
+				"version" : "0.3.0",
 				"repo" : "https://github.com/sp-tms/tms-packages-admin-jobstrips"
 			},
 			
 			{
 				"name" : "JobsPayments",
-				"version" : "0.0.0",
+				"version" : "0.2.0",
 				"repo" : "https://github.com/sp-tms/tms-packages-admin-jobspayments"
 			},
 			
 			{
 				"name" : "JobsCharges",
-				"version" : "0.0.0",
+				"version" : "0.3.0",
 				"repo" : "https://github.com/sp-tms/tms-packages-admin-jobscharges"
 			},
 			
 			{
 				"name" : "JobsExpenses",
-				"version" : "0.1.0",
+				"version" : "0.2.0",
 				"repo" : "https://github.com/sp-tms/tms-packages-admin-jobsexpenses"
 			},
 			
@@ -80,7 +80,7 @@
 			
 			{
 				"name" : "JobsFuel",
-				"version" : "0.1.0",
+				"version" : "0.2.0",
 				"repo" : "https://github.com/sp-tms/tms-packages-admin-jobsfuel"
 			}
 		],
@@ -89,7 +89,7 @@
 		[
 			{
 				"name" : "Jobs",
-				"version" : "0.2.0",
+				"version" : "0.5.0",
 				"repo" : "https://github.com/sp-tms/tms-views-admin-default-jobs"
 			}
 		],
